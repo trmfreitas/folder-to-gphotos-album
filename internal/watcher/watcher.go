@@ -134,9 +134,18 @@ func (w *Watcher) Run(ctx context.Context) {
 			if !ok {
 				return
 			}
+			log.Printf("[watcher] event: %s %s", evt.Op, evt.Name)
 			switch {
-			case evt.Has(fsnotify.Create) || evt.Has(fsnotify.Write) || evt.Has(fsnotify.Rename):
+			case evt.Has(fsnotify.Create) || evt.Has(fsnotify.Write):
 				emitUpload(evt.Name)
+			case evt.Has(fsnotify.Rename):
+				// On macOS, moving a file to Trash or out of the folder fires
+				// Rename on the source path. If the file is gone, treat as removal.
+				if _, err := os.Stat(evt.Name); os.IsNotExist(err) {
+					emitRemove(evt.Name)
+				} else {
+					emitUpload(evt.Name)
+				}
 			case evt.Has(fsnotify.Remove):
 				emitRemove(evt.Name)
 			}

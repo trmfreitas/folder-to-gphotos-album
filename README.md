@@ -4,7 +4,9 @@ A Go daemon that watches a local folder and automatically uploads new photos and
 
 ## Features
 
+- **Initial sync on startup** — uploads all files already in the folder and removes from the album any that have been deleted since the last run
 - **Real-time folder watching** via [fsnotify](https://github.com/fsnotify/fsnotify) with write-debouncing to handle file copies correctly
+- **Deletion sync** — moving or deleting a file from the watched folder removes it from the Google Photos album automatically
 - **Automatic album management** — finds the target album by name or creates it if it doesn't exist
 - **Duplicate prevention** — SHA256-based tracking persisted to disk; re-running the daemon never re-uploads the same file
 - **Batch uploads** — groups files into requests of up to 50 items to minimise API quota usage
@@ -63,13 +65,15 @@ mv folder-to-gphotos-album /usr/local/bin/
 ### 1. First-time setup
 
 ```bash
-./folder-to-gphotos-album setup
+./folder-to-gphotos-album setup --creds /path/to/client_secret_xxx.json
 ```
 
+Or without the flag — the wizard will prompt for the path interactively.
+
 The wizard will:
-- Ask for the path to your downloaded OAuth credentials JSON file
+- Copy your OAuth client credentials to `~/.folder-to-gphotos-album/client_credentials.json` (mode `0600`)
 - Open your browser for Google account authorisation (one-time)
-- Store the refresh token at `~/.folder-to-gphotos-album/credentials.json` (mode `0600`)
+- Store the OAuth token at `~/.folder-to-gphotos-album/token.json` (mode `0600`)
 - Ask which local folder to watch and which Google Photos album to use
 - Save settings to `~/.folder-to-gphotos-album/config.json`
 
@@ -88,7 +92,11 @@ Override any configured value with flags:
   --batch-size 25
 ```
 
-Drop any supported image or video into the watched folder — it will be uploaded within ~3 seconds (debounce window).
+On startup the daemon performs an initial sync:
+- Uploads any files in the folder not yet in the album
+- Removes from the album any files that were deleted while the daemon was not running
+
+Drop any supported image or video into the watched folder — it will be uploaded within ~3 seconds (debounce window). Delete or move a file out of the folder and it will be removed from the album.
 
 Press **Ctrl+C** to stop; the daemon drains any pending uploads before exiting.
 
@@ -129,14 +137,15 @@ All data lives under `~/.folder-to-gphotos-album/`:
 | File | Purpose |
 |---|---|
 | `config.json` | Application settings |
-| `credentials.json` | OAuth refresh token (mode `0600`) |
-| `uploaded.json` | SHA256 hashes of successfully uploaded files (prevents re-uploads) |
+| `client_credentials.json` | OAuth client ID and secret from Google Cloud Console (mode `0600`) |
+| `token.json` | OAuth access + refresh token (mode `0600`) |
+| `uploaded.json` | SHA256 hashes and media item IDs of uploaded files |
 
 To reset authentication only:
 
 ```bash
-rm ~/.folder-to-gphotos-album/credentials.json
-./folder-to-gphotos-album setup
+rm ~/.folder-to-gphotos-album/token.json
+./folder-to-gphotos-album setup --creds /path/to/client_secret_xxx.json
 ```
 
 To reset everything:
@@ -235,8 +244,8 @@ All Google Photos API calls are made directly via `net/http` against the [Photos
 
 - **Top-level folder only** — subdirectories are not watched. This is a design decision; add recursive watcher support if needed.
 - **OAuth 2.0 required** — the Google Photos Library API does not support service accounts.
-- **App-created media only** — albums and media created by this daemon can be listed/managed; items not created by this app are not visible via the API (`appendonly` scope).
-- **Deletion sync** — when a file is deleted from the watched folder, the daemon removes it from the Google Photos album. Only files uploaded by this daemon (tracked in `uploaded.json`) can be removed.
+- **App-created media only** — albums and media created by this daemon can be listed/managed; items not created by this app are not visible via the API.
+- **Deletion sync** — only files uploaded by this daemon (tracked in `uploaded.json`) can be removed from the album. Files added to the album through other means are not affected.
 
 ---
 

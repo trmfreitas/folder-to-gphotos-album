@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -112,6 +113,15 @@ func New(ctx context.Context, httpClient *http.Client, albumName string, stateFi
 	}
 	u.loadState()
 	return u, nil
+}
+
+// TrackedPaths returns all file paths currently tracked in the upload state.
+func (u *Uploader) TrackedPaths() []string {
+	paths := make([]string, 0, len(u.st.ByPath))
+	for p := range u.st.ByPath {
+		paths = append(paths, p)
+	}
+	return paths
 }
 
 // Upload uploads the given file paths, skipping those already in the album.
@@ -284,17 +294,41 @@ func (u *Uploader) Remove(ctx context.Context, paths []string) error {
 	return nil
 }
 
-// uploadBytes uploads raw file bytes and returns the Google Photos upload token.
+// mimeTypes provides MIME types for extensions not reliably present in the
+// system MIME database (e.g. .heic/.heif on macOS/Linux).
+var mimeTypes = map[string]string{
+	".heic": "image/heic",
+	".heif": "image/heif",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".bmp":  "image/bmp",
+	".tiff": "image/tiff",
+	".tif":  "image/tiff",
+	".mp4":  "video/mp4",
+	".mov":  "video/quicktime",
+	".avi":  "video/x-msvideo",
+}
+
+func mimeTypeForFile(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	if t, ok := mimeTypes[ext]; ok {
+		return t
+	}
+	if t := mime.TypeByExtension(ext); t != "" {
+		return t
+	}
+	return "application/octet-stream"
+}
 func (u *Uploader) uploadBytes(ctx context.Context, path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("reading file: %w", err)
 	}
 
-	mimeType := mime.TypeByExtension(filepath.Ext(path))
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
+	mimeType := mimeTypeForFile(path)
 
 	var token string
 	for attempt := 0; attempt < maxRetries; attempt++ {

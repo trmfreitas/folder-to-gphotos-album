@@ -13,11 +13,12 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-const credentialsFile = "credentials.json"
+const tokenFile = "token.json"
 
-// PhotosScopes are the OAuth scopes required for uploading to Google Photos.
+// PhotosScopes are the OAuth scopes required for uploading to and removing from Google Photos.
 var PhotosScopes = []string{
 	"https://www.googleapis.com/auth/photoslibrary.appendonly",
+	"https://www.googleapis.com/auth/photoslibrary.edit.appcreateddata",
 	"https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata",
 }
 
@@ -50,7 +51,7 @@ func NewManager(creds *ClientCredentials) (*Manager, error) {
 
 	return &Manager{
 		oauthConfig: cfg,
-		tokenPath:   filepath.Join(dir, credentialsFile),
+		tokenPath:   filepath.Join(dir, tokenFile),
 	}, nil
 }
 

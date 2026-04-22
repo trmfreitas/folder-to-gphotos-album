@@ -160,7 +160,12 @@ func (w *Watcher) Run(ctx context.Context) {
 }
 
 // isSupportedFile reports whether the path has a supported media extension.
+// Dotfiles (e.g. .DS_Store) are always excluded.
 func isSupportedFile(path string) bool {
+	base := filepath.Base(path)
+	if strings.HasPrefix(base, ".") {
+		return false
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 	return SupportedExtensions[ext]
 }

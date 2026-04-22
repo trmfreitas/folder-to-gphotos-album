@@ -354,8 +354,12 @@ func TestUpload_BatchCreateItemError(t *testing.T) {
 	_ = u.Upload(context.Background(), []string{photoPath})
 
 	hash, _ := hashFile(photoPath)
-	if _, ok := u.st.ByHash[hash]; ok {
-		t.Error("failed item should NOT be recorded in state")
+	id, ok := u.st.ByHash[hash]
+	if !ok {
+		t.Error("failed item should be recorded in state to prevent retries")
+	}
+	if id != "" {
+		t.Errorf("failed item should have empty media item ID, got %q", id)
 	}
 }
 

@@ -31,6 +31,7 @@ func TestIsSupportedFile(t *testing.T) {
 
 	unsupported := []string{
 		"doc.pdf", "archive.zip", "readme.txt", "script.sh", "data.json", "noext",
+		".DS_Store", ".hidden.jpg", ".localized",
 	}
 	for _, name := range unsupported {
 		if isSupportedFile(name) {

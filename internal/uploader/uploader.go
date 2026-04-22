@@ -197,7 +197,11 @@ func (u *Uploader) Upload(ctx context.Context, paths []string) error {
 
 		for k, result := range resp.NewMediaItemResults {
 			if result.Status.Code != 0 {
-				log.Printf("[uploader] item %s failed (code %d): %s", batch[k].path, result.Status.Code, result.Status.Message)
+				log.Printf("[uploader] item %s failed (code %d): %s — marking as skipped to avoid infinite retries", batch[k].path, result.Status.Code, result.Status.Message)
+				// Persist the failure so the file is not retried on the next run.
+				// A mediaItemID of "" means "attempted but rejected by the API".
+				u.st.ByHash[batch[k].hash] = ""
+				u.st.ByPath[batch[k].path] = batch[k].hash
 				continue
 			}
 			id := ""

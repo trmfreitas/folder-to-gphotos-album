@@ -21,6 +21,11 @@
 
 ```
 cmd/folder-to-gphotos-album/     # CLI layer (Cobra). One file per subcommand.
+	main.go    # rootCmd + AddCommand wiring
+	setup.go   # First-time wizard: creds + OAuth + config
+	login.go   # Re-authentication only (preserves config)
+	daemon.go  # Watcher event loop + upload dispatch
+	config.go  # Config viewer / interactive editor
 internal/auth/         # OAuth 2.0 lifecycle (token acquisition, storage, refresh)
 internal/config/       # Config struct, load/save, validation
 internal/uploader/     # Google Photos REST API client (no generated SDK)
@@ -36,7 +41,13 @@ All cross-package dependencies flow **inward** only:
 
 ## Critical design decisions
 
-### No generated Google Photos SDK
+### OAuth flow design
+There are two commands that run the OAuth browser flow:
+- `setup` — full wizard: prompts for credentials file, runs OAuth, then prompts for folder/album config. Run this on first use.
+- `login` — authentication only: reads the already-saved `client_credentials.json` and runs the OAuth flow without touching config. Run this when the token expires.
+
+Both call `auth.Manager.Setup(ctx)`. Each invocation creates its own `http.ServeMux` (not `http.DefaultServeMux`) so the callback handler can be registered safely even if both commands are ever called in the same process.
+
 `google.golang.org/api/photoslibrary/v1` does **not exist** as a package in the
 published `google.golang.org/api` module. All Google Photos API calls are made
 directly via `net/http` in `internal/uploader/uploader.go`. Do not attempt to use
@@ -99,6 +110,7 @@ context is cancelled, closing the `events` channel which unblocks the main loop.
 |---|---|
 | `cmd/folder-to-gphotos-album/main.go` | Register Cobra subcommands; `main()` entry |
 | `cmd/folder-to-gphotos-album/setup.go` | Interactive wizard: OAuth flow + config init |
+| `cmd/folder-to-gphotos-album/login.go` | Re-authentication only; reads saved credentials, runs OAuth flow, preserves config |
 | `cmd/folder-to-gphotos-album/daemon.go` | Watcher event loop, batch coalescing, upload dispatch |
 | `cmd/folder-to-gphotos-album/config.go` | Read-only config printer + interactive editor |
 | `internal/auth/oauth.go` | `Manager` struct: token storage, browser flow, HTTP client factory |

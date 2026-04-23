@@ -39,8 +39,6 @@ func init() {
 	daemonCmd.Flags().StringVar(&flagAlbum, "album", "", "Override target album name")
 	daemonCmd.Flags().StringVar(&flagCredFile, "creds", "", "Path to OAuth credentials JSON (only needed on first run)")
 	daemonCmd.Flags().IntVar(&flagBatchSize, "batch-size", 0, "Override batch size (1-50)")
-
-	setupCmd.Flags().StringVar(&flagCredFile, "creds", "", "Path to OAuth credentials JSON")
 }
 
 func runDaemon(cmd *cobra.Command, args []string) error {
@@ -84,7 +82,7 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	}
 
 	if !mgr.IsAuthenticated() {
-		return fmt.Errorf("not authenticated; run 'folder-to-gphotos-album setup' first")
+		return fmt.Errorf("not authenticated; run 'folder-to-gphotos-album login' to re-authenticate (or 'setup' to reconfigure from scratch)")
 	}
 
 	// Root context with signal cancellation for graceful shutdown.

@@ -13,6 +13,10 @@ import (
 	"github.com/trmfreitas/folder-to-gphotos-album/internal/config"
 )
 
+func init() {
+	setupCmd.Flags().StringVar(&flagCredFile, "creds", "", "Path to OAuth credentials JSON")
+}
+
 var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "First-time setup: authenticate with Google and configure the daemon",

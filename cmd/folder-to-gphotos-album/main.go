@@ -13,7 +13,8 @@ var rootCmd = &cobra.Command{
 	Long: `folder-to-gphotos-album watches a local folder and automatically uploads
 new photos and videos to a Google Photos album.
 
-Run 'folder-to-gphotos-album setup' on first use to authenticate and configure.`,
+Run 'folder-to-gphotos-album setup' on first use to authenticate and configure.
+Run 'folder-to-gphotos-album login' if the daemon reports it is not authenticated.`,
 }
 
 func main() {

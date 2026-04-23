@@ -117,12 +117,15 @@ func (m *Manager) Setup(ctx context.Context) error {
 	fmt.Println("  " + authURL)
 	fmt.Println()
 
-	// Start local callback server.
+	// Start local callback server. Use a local mux so that this function can be
+	// called multiple times within the same process without panicking on duplicate
+	// handler registrations on http.DefaultServeMux.
 	codeCh := make(chan string, 1)
 	errCh := make(chan error, 1)
 
-	server := &http.Server{Addr: ":8085"}
-	http.HandleFunc("/oauth2callback", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	server := &http.Server{Addr: ":8085", Handler: mux}
+	mux.HandleFunc("/oauth2callback", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			errCh <- fmt.Errorf("no code received from OAuth callback")
@@ -175,7 +178,7 @@ func (m *Manager) Setup(ctx context.Context) error {
 func (m *Manager) HTTPClient(ctx context.Context) (*http.Client, error) {
 	token, err := m.loadToken()
 	if err != nil {
-		return nil, fmt.Errorf("no stored credentials; run 'folder-to-gphotos-album setup' first: %w", err)
+		return nil, fmt.Errorf("not authenticated; run 'folder-to-gphotos-album login' to re-authenticate, or 'setup' for first-time configuration: %w", err)
 	}
 
 	tokenSource := m.oauthConfig.TokenSource(ctx, token)

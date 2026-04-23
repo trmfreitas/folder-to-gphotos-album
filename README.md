@@ -13,6 +13,7 @@ A Go daemon that watches a local folder and automatically uploads new photos and
 - **Exponential backoff** on rate-limit (HTTP 429) and transient network errors
 - **Graceful shutdown** — SIGINT/SIGTERM drains the upload queue before exit
 - **One-time OAuth 2.0 setup** with refresh tokens stored locally; the daemon runs unattended after that
+- **Re-authentication in one command** — run `login` to refresh credentials without losing any configuration
 
 ### Supported file types
 
@@ -100,7 +101,21 @@ Drop any supported image or video into the watched folder — it will be uploade
 
 Press **Ctrl+C** to stop; the daemon drains any pending uploads before exiting.
 
-### 3. View or edit configuration
+### 3. Re-authenticate (token expired)
+
+If the daemon reports it is not authenticated, run:
+
+```bash
+./folder-to-gphotos-album login
+```
+
+This opens a browser window to obtain a fresh token. Your watched folder, album name, and all other settings are preserved. Pass `--creds` only if the saved client credentials are missing:
+
+```bash
+./folder-to-gphotos-album login --creds /path/to/client_secret_xxx.json
+```
+
+### 4. View or edit configuration
 
 ```bash
 ./folder-to-gphotos-album config
@@ -141,11 +156,17 @@ All data lives under `~/.folder-to-gphotos-album/`:
 | `token.json` | OAuth access + refresh token (mode `0600`) |
 | `uploaded.json` | SHA256 hashes and media item IDs of uploaded files |
 
-To reset authentication only:
+To reset authentication only, use the `login` command (recommended):
+
+```bash
+./folder-to-gphotos-album login
+```
+
+Or delete the token file manually if you need to change Google accounts:
 
 ```bash
 rm ~/.folder-to-gphotos-album/token.json
-./folder-to-gphotos-album setup --creds /path/to/client_secret_xxx.json
+./folder-to-gphotos-album login
 ```
 
 To reset everything:

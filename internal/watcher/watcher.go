@@ -82,6 +82,11 @@ func (w *Watcher) Run(ctx context.Context) {
 	// pending maps file path → debounce timer for upload events.
 	pending := make(map[string]*time.Timer)
 
+	// timerFired carries paths whose debounce timer has elapsed.
+	// Using a channel ensures all pending-map mutations happen on this goroutine
+	// and avoids a data race between the timer goroutine and the Run goroutine.
+	timerFired := make(chan string, 100)
+
 	emitUpload := func(path string) {
 		if !isSupportedFile(path) {
 			return
@@ -91,14 +96,8 @@ func (w *Watcher) Run(ctx context.Context) {
 			return
 		}
 		pending[path] = time.AfterFunc(w.debounceDur, func() {
-			delete(pending, path)
-			// Verify file still exists and isn't a directory.
-			info, err := os.Stat(path)
-			if err != nil || info.IsDir() {
-				return
-			}
 			select {
-			case w.events <- Event{Path: path, Kind: EventUpload}:
+			case timerFired <- path:
 			case <-ctx.Done():
 			}
 		})
@@ -129,6 +128,19 @@ func (w *Watcher) Run(ctx context.Context) {
 				t.Stop()
 			}
 			return
+
+		case path := <-timerFired:
+			delete(pending, path)
+			// Verify file still exists and isn't a directory.
+			info, err := os.Stat(path)
+			if err != nil || info.IsDir() {
+				continue
+			}
+			select {
+			case w.events <- Event{Path: path, Kind: EventUpload}:
+			case <-ctx.Done():
+				return
+			}
 
 		case evt, ok := <-w.fw.Events:
 			if !ok {

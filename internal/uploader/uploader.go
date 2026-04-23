@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,6 +17,18 @@ import (
 	"strings"
 	"time"
 )
+
+// permanentAPIError is returned when the API responds with a 4xx status code
+// that is not a rate-limit (429). These errors will not succeed on retry and
+// the caller should clean up any stale state rather than retrying.
+type permanentAPIError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *permanentAPIError) Error() string {
+	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
+}
 
 const (
 	baseURL        = "https://photoslibrary.googleapis.com/v1"
@@ -266,6 +279,11 @@ func (u *Uploader) Remove(ctx context.Context, paths []string) error {
 				break
 			}
 			log.Printf("[uploader] batch remove attempt %d failed: %v", attempt+1, removeErr)
+			// Permanent errors (invalid IDs, etc.) will never succeed — stop retrying immediately.
+			var permErr *permanentAPIError
+			if errors.As(removeErr, &permErr) {
+				break
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -273,7 +291,29 @@ func (u *Uploader) Remove(ctx context.Context, paths []string) error {
 			}
 		}
 		if removeErr != nil {
-			log.Printf("[uploader] batch remove failed after %d attempts: %v", maxRetries, removeErr)
+			var permErr *permanentAPIError
+			if errors.As(removeErr, &permErr) {
+				// The media item IDs are invalid (already deleted from Google Photos or
+				// never existed). Purge them from local state so they are not retried
+				// on subsequent runs.
+				log.Printf("[uploader] permanent error removing batch, purging %d stale state entries: %v", len(batch), removeErr)
+				for _, item := range batch {
+					delete(u.st.ByPath, item.path)
+					stillReferenced := false
+					for _, h := range u.st.ByPath {
+						if h == item.hash {
+							stillReferenced = true
+							break
+						}
+					}
+					if !stillReferenced {
+						delete(u.st.ByHash, item.hash)
+					}
+				}
+				u.saveState()
+			} else {
+				log.Printf("[uploader] batch remove failed after %d attempts: %v", maxRetries, removeErr)
+			}
 			continue
 		}
 
@@ -437,7 +477,12 @@ func (u *Uploader) batchRemove(ctx context.Context, mediaItemIDs []string) error
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("batchRemove status %d: %s", resp.StatusCode, string(body))
+		err := fmt.Errorf("batchRemove status %d: %s", resp.StatusCode, string(body))
+		// 4xx errors (except 429 rate-limit) are permanent: retrying will never succeed.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
+			return &permanentAPIError{StatusCode: resp.StatusCode, Body: string(body)}
+		}
+		return err
 	}
 	return nil
 }
